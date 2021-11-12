@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt;
+use std::sync::Arc;
 
 /// Key used for metric `AttributeSet`s and trace `Span` attributes.
 #[cfg_attr(feature = "serialize", derive(Deserialize, Serialize))]
@@ -48,6 +49,14 @@ impl Key {
         KeyValue {
             key: self,
             value: Value::String(value.into()),
+        }
+    }
+
+    /// Create a `KeyValue` pair for `Arc<String>` values.
+    pub fn shared_string<T: Into<Arc<String>>>(self, value: T) -> KeyValue {
+        KeyValue {
+            key: self,
+            value: Value::SharedString(value.into()),
         }
     }
 
@@ -168,6 +177,8 @@ pub enum Value {
     F64(f64),
     /// String values
     String(Cow<'static, str>),
+    /// String values
+    SharedString(Arc<String>),
     /// Array of homogeneous values
     Array(Array),
 }
@@ -175,13 +186,14 @@ pub enum Value {
 impl Value {
     /// String representation of the `Value`
     ///
-    /// This will allocate iff the underlying value is not a `String`.
+    /// This will allocate iff the underlying value is not a `String` or `SharedString`.
     pub fn as_str(&self) -> Cow<'_, str> {
         match self {
             Value::Bool(v) => format!("{}", v).into(),
             Value::I64(v) => format!("{}", v).into(),
             Value::F64(v) => format!("{}", v).into(),
             Value::String(v) => Cow::Borrowed(v.as_ref()),
+            Value::SharedString(v) => Cow::Borrowed(v.as_ref()),
             Value::Array(v) => format!("{}", v).into(),
         }
     }
@@ -208,6 +220,7 @@ from_values!(
     (i64, Value::I64);
     (f64, Value::F64);
     (Cow<'static, str>, Value::String);
+    (Arc<String>, Value::SharedString);
 );
 
 impl From<&'static str> for Value {
@@ -230,7 +243,8 @@ impl fmt::Display for Value {
             Value::Bool(v) => fmt.write_fmt(format_args!("{}", v)),
             Value::I64(v) => fmt.write_fmt(format_args!("{}", v)),
             Value::F64(v) => fmt.write_fmt(format_args!("{}", v)),
-            Value::String(v) => fmt.write_fmt(format_args!("{}", v)),
+            Value::String(v) => fmt.write_str(v),
+            Value::SharedString(v) => fmt.write_str(v),
             Value::Array(v) => fmt.write_fmt(format_args!("{}", v)),
         }
     }
